@@ -1,0 +1,245 @@
+//@version=6
+indicator(title="Stochastic ", shorttitle="Stoch ala DTR", format=format.price, precision=2, timeframe="", timeframe_gaps=true)
+smoothALLK = input.int(2, title="%K Smoothing", minval=1)
+
+periodK1 = input.int(9, title="%K Length1", minval=1)
+periodD1 = input.int(3, title="%D Smoothing1", minval=1)
+k1 = ta.sma(ta.stoch(close, high, low, periodK1), smoothALLK)
+
+periodK2 = input.int(14, title="%K Length2", minval=1)
+//smoothK2 = input.int(1, title="%K Smoothing2", minval=1)
+periodD2 = input.int(3, title="%D Smoothing2", minval=1)
+k2 = ta.sma(ta.stoch(close, high, low, periodK2), smoothALLK)
+
+periodK3 = input.int(40, title="%K Length3", minval=1)
+//smoothK3 = input.int(1, title="%K Smoothing3", minval=1)
+periodD3 = input.int(4, title="%D Smoothing3", minval=1)
+k3 = ta.sma(ta.stoch(close, high, low, periodK3), smoothALLK)
+
+periodK4 = input.int(60, title="%K Length4", minval=1)
+//smoothK4 = input.int(1, title="%K Smoothing4", minval=1)
+periodD4 = input.int(10, title="%D Smoothing4", minval=1)
+k4 = ta.sma(ta.stoch(close, high, low, periodK4), smoothALLK)
+
+d1 = ta.sma(k1, periodD1)
+d2 = ta.sma(k2, periodD2)
+d3 = ta.sma(k3, periodD3)
+d4 = ta.sma(k4, periodD4)
+
+// Rysowanie linii %D
+plot(d1, title="%D1", color=color.rgb(0, 250, 255))
+plot(d2, title="%D2", color=color.rgb(0, 200, 255))
+plot(d3, title="%D3", color=color.rgb(0, 150, 255))
+
+// Liczniki dla czasu przebywania w strefach
+var upperZoneCount = 0   // Inicjalizacja licznika dla górnej strefy
+var lowerZoneCount = 0   // Inicjalizacja licznika dla dolnej strefy
+
+// Logika sprawdzania przebywania w strefach
+inUpperZone = d4 > 80
+inLowerZone = d4 < 20
+
+// Licznik świec w górnej strefie (powyżej 80)
+upperZoneCount := inUpperZone ? (upperZoneCount + 1) : 0
+// Licznik świec w dolnej strefie (poniżej 20)
+lowerZoneCount := inLowerZone ? (lowerZoneCount + 1) : 0
+
+// Logika dynamicznego koloru
+colorD4 = upperZoneCount > 4 ? #ff0000 : lowerZoneCount > 4 ? #00ff00 : color.rgb(0, 100, 255)
+
+// Rysowanie linii %D4 z dynamicznym kolorem
+plot(d4, title="%D4", color=colorD4, linewidth=3)
+
+
+h0 = hline(80, "Upper Band", color=#787B86)
+hline(50, "Middle Band", color=color.new(#787B86, 50))
+h1 = hline(20, "Lower Band", color=#787B86)
+//fill(h0, h1, color=#ffffff00, title="Background")
+
+
+rsiLengthInput = input.int(14, minval=1, title="RSI Length", group="RSI Settings")
+rsiSourceInput = input.source(close, "Source", group="RSI Settings")
+
+change = ta.change(rsiSourceInput)
+up = ta.rma(math.max(change, 0), rsiLengthInput)
+down = ta.rma(-math.min(change, 0), rsiLengthInput)
+rsi = down == 0 ? 100 : up == 0 ? 0 : 100 - (100 / (1 + up / down))
+
+rsiPlot = plot(rsi, "RSI", color=#ffffff)
+
+
+len = input.int(title="RSI Period", minval=1, defval=14)
+src = input(title="RSI Source", defval=close)
+lbR = input(title="Pivot Lookback Right", defval=5, display = display.data_window)
+lbL = input(title="Pivot Lookback Left", defval=5, display = display.data_window)
+rangeUpper = input(title="Max of Lookback Range", defval=60, display = display.data_window)
+rangeLower = input(title="Min of Lookback Range", defval=5, display = display.data_window)
+plotBull = input(title="Plot Bullish", defval=true, display = display.data_window)
+plotHiddenBull = input(title="Plot Hidden Bullish", defval=false, display = display.data_window)
+plotBear = input(title="Plot Bearish", defval=true, display = display.data_window)
+plotHiddenBear = input(title="Plot Hidden Bearish", defval=false, display = display.data_window)
+bearColor = color.red
+bullColor = color.green
+hiddenBullColor = color.new(color.green, 80)
+hiddenBearColor = color.new(color.red, 80)
+textColor = color.white
+noneColor = color.new(color.white, 100)
+osc = ta.rsi(src, len)
+
+plot(osc, title="RSI", linewidth=2, color=#2962FF)
+hline(50, title="Middle Line", color=#787B86, linestyle=hline.style_dotted)
+obLevel = hline(70, title="Overbought", color=#787B86, linestyle=hline.style_dotted)
+osLevel = hline(30, title="Oversold", color=#787B86, linestyle=hline.style_dotted)
+fill(obLevel, osLevel, title="Background", color=color.rgb(33, 150, 243, 90))
+
+plFound = na(ta.pivotlow(osc, lbL, lbR)) ? false : true
+phFound = na(ta.pivothigh(osc, lbL, lbR)) ? false : true
+_inRange(cond) =>
+    bars = ta.barssince(cond == true)
+    rangeLower <= bars and bars <= rangeUpper
+
+//------------------------------------------------------------------------------
+// Regular Bullish
+// Osc: Higher Low
+inRangePl = _inRange(plFound[1])
+oscHL = osc[lbR] > ta.valuewhen(plFound, osc[lbR], 1) and inRangePl
+
+// Price: Lower Low
+
+priceLL = low[lbR] < ta.valuewhen(plFound, low[lbR], 1)
+bullCondAlert = priceLL and oscHL and plFound
+bullCond = plotBull and bullCondAlert
+
+plot(
+     plFound ? osc[lbR] : na,
+     offset=-lbR,
+     title="Regular Bullish",
+     linewidth=2,
+     color=(bullCond ? bullColor : noneColor),
+     display = display.pane,
+     editable = plotBull
+     )
+
+plotshape(
+     bullCond ? osc[lbR] : na,
+     offset=-lbR,
+     title="Regular Bullish Label",
+     text=" Bull ",
+     style=shape.labelup,
+     location=location.absolute,
+     color=bullColor,
+     textcolor=textColor,
+     editable = plotBull
+     )
+
+//------------------------------------------------------------------------------
+// Hidden Bullish
+// Osc: Lower Low
+
+oscLL = osc[lbR] < ta.valuewhen(plFound, osc[lbR], 1) and inRangePl
+
+// Price: Higher Low
+
+priceHL = low[lbR] > ta.valuewhen(plFound, low[lbR], 1)
+hiddenBullCondAlert = priceHL and oscLL and plFound
+hiddenBullCond = plotHiddenBull and hiddenBullCondAlert
+
+plot(
+     plFound ? osc[lbR] : na,
+     offset=-lbR,
+     title="Hidden Bullish",
+     linewidth=2,
+     color=(hiddenBullCond ? hiddenBullColor : noneColor),
+     display = display.pane,
+     editable = plotHiddenBull
+     )
+
+plotshape(
+     hiddenBullCond ? osc[lbR] : na,
+     offset=-lbR,
+     title="Hidden Bullish Label",
+     text=" H Bull ",
+     style=shape.labelup,
+     location=location.absolute,
+     color=bullColor,
+     textcolor=textColor,
+     editable = plotHiddenBull
+     )
+
+//------------------------------------------------------------------------------
+// Regular Bearish
+// Osc: Lower High
+inRangePh = _inRange(phFound[1])
+oscLH = osc[lbR] < ta.valuewhen(phFound, osc[lbR], 1) and inRangePh
+
+// Price: Higher High
+
+priceHH = high[lbR] > ta.valuewhen(phFound, high[lbR], 1)
+
+bearCondAlert = priceHH and oscLH and phFound
+bearCond = plotBear and bearCondAlert
+
+plot(
+     phFound ? osc[lbR] : na,
+     offset=-lbR,
+     title="Regular Bearish",
+     linewidth=2,
+     color=(bearCond ? bearColor : noneColor),
+     display = display.pane,
+     editable = plotBear
+     )
+
+plotshape(
+     bearCond ? osc[lbR] : na,
+     offset=-lbR,
+     title="Regular Bearish Label",
+     text=" Bear ",
+     style=shape.labeldown,
+     location=location.absolute,
+     color=bearColor,
+     textcolor=textColor,
+     editable = plotBear
+     )
+
+//------------------------------------------------------------------------------
+// Hidden Bearish
+// Osc: Higher High
+
+oscHH = osc[lbR] > ta.valuewhen(phFound, osc[lbR], 1) and inRangePh
+
+// Price: Lower High
+
+priceLH = high[lbR] < ta.valuewhen(phFound, high[lbR], 1)
+
+hiddenBearCondAlert = priceLH and oscHH and phFound
+hiddenBearCond = plotHiddenBear and hiddenBearCondAlert
+
+plot(
+     phFound ? osc[lbR] : na,
+     offset=-lbR,
+     title="Hidden Bearish",
+     linewidth=2,
+     color=(hiddenBearCond ? hiddenBearColor : noneColor),
+     display = display.pane,
+     editable = plotHiddenBear
+     )
+
+plotshape(
+     hiddenBearCond ? osc[lbR] : na,
+     offset=-lbR,
+     title="Hidden Bearish Label",
+     text=" H Bear ",
+     style=shape.labeldown,
+     location=location.absolute,
+     color=bearColor,
+     textcolor=textColor,
+     editable = plotHiddenBear
+     )
+
+alertcondition(bullCondAlert, title='Regular Bullish Divergence', message="Found a new Regular Bullish Divergence, `Pivot Lookback Right` number of bars to the left of the current bar")
+alertcondition(hiddenBullCondAlert, title='Hidden Bullish Divergence', message='Found a new Hidden Bullish Divergence, `Pivot Lookback Right` number of bars to the left of the current bar')
+alertcondition(bearCondAlert, title='Regular Bearish Divergence', message='Found a new Regular Bearish Divergence, `Pivot Lookback Right` number of bars to the left of the current bar')
+alertcondition(hiddenBearCondAlert, title='Hidden Bearish Divergence', message='Found a new Hidden Bearish Divergence, `Pivot Lookback Right` number of bars to the left of the current bar')
+
+
+
